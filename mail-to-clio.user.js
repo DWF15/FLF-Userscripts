@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Foulk Law Firm • Mail to Clio
 // @namespace    foulklawfirm.mail-to-clio
-// @version      1.2.1
+// @version      1.2.2
 // @updateURL    https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js
 // @downloadURL  https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js
 // @homepageURL  https://github.com/DWF15/FLF-Userscripts
@@ -114,16 +114,65 @@
   let handoffListener = null;
   let config = GM_getValue('flf-config-v1', { url:'https://foulk-mail-to-clio-production.up.railway.app', keywords:defaults, enabled:true });
   const host = document.createElement('div'); host.id='flf-mail-assistant';
-  host.style.cssText='position:fixed;bottom:24px;right:24px;z-index:2147483000';
+  host.style.cssText='position:fixed;bottom:24px;right:24px;z-index:2147483000;width:300px;max-width:calc(100vw - 16px)';
   const shadow=host.attachShadow({mode:'closed'});
   // Build nodes without HTML assignment: compatible with Trusted Types enforcement.
   const style=document.createElement('style');
   style.textContent='button{border:0;border-radius:12px;background:#123b46;color:white;font:600 14px system-ui;padding:13px 18px;box-shadow:0 4px 20px #0003;cursor:pointer}button:disabled{opacity:.6}small{display:block;background:white;color:#263e48;padding:6px 10px;font:12px system-ui;max-width:280px;border-radius:6px;margin-top:6px}';
   const button=document.createElement('button');button.type='button';button.textContent='Review for Clio';
-  const note=document.createElement('small');note.textContent='Mail to Clio 1.2.1 • Open one notification.';
-  shadow.append(style,button,note);
+  const note=document.createElement('small');note.textContent='Mail to Clio 1.2.2 • Open one notification.';
+  const move=document.createElement('button');move.type='button';move.textContent='⋮⋮ Move';move.className='move';move.title='Drag to move. Arrow keys move the button; Shift moves farther.';move.setAttribute('aria-label','Move Mail to Clio panel');
+  style.textContent+='.move{display:block;margin:0 0 5px auto;padding:4px 10px;border-radius:6px;background:#eef3f4;color:#38535a;font:12px system-ui;box-shadow:0 1px 4px #0002;cursor:grab;touch-action:none;user-select:none}.move:active{cursor:grabbing}';
+  shadow.append(style,move,button,note);
   function mount() { if(!host.isConnected && document.body) document.body.append(host); }
   mount();
+  const positionKey='flf-panel-position-v1';
+  let position=GM_getValue(positionKey,null),drag=null;
+  if(!position||!Number.isFinite(position.left)||!Number.isFinite(position.top))position=null;
+  function place(left,top){
+    const rect=host.getBoundingClientRect(),margin=8;
+    const x=Math.max(margin,Math.min(left,Math.max(margin,window.innerWidth-rect.width-margin)));
+    const y=Math.max(margin,Math.min(top,Math.max(margin,window.innerHeight-rect.height-margin)));
+    host.style.left=x+'px';host.style.top=y+'px';host.style.right='auto';host.style.bottom='auto';
+    return {left:x,top:y};
+  }
+  function keepVisible(){
+    if(position){place(position.left,position.top);return;}
+    const rect=host.getBoundingClientRect();
+    // Retain the bottom-right default until the user moves the panel.
+    if(rect.left<8||rect.top<8)place(rect.left,rect.top);
+  }
+  function finishDrag(cancel=false){
+    if(!drag)return;
+    const ended=drag;drag=null;
+    if(cancel){position=ended.previous;if(position)place(position.left,position.top);else{host.style.left='auto';host.style.top='auto';host.style.right='24px';host.style.bottom='24px';}}
+    else{const rect=host.getBoundingClientRect();position=place(rect.left,rect.top);GM_setValue(positionKey,position);}
+    if(move.hasPointerCapture(ended.id))move.releasePointerCapture(ended.id);
+  }
+  move.addEventListener('pointerdown',event=>{
+    if(event.button!==0||!event.isPrimary||drag)return;
+    const rect=host.getBoundingClientRect();drag={id:event.pointerId,x:event.clientX,y:event.clientY,left:rect.left,top:rect.top,previous:position};
+    move.setPointerCapture(event.pointerId);event.preventDefault();
+  });
+  move.addEventListener('pointermove',event=>{
+    if(!drag||event.pointerId!==drag.id)return;
+    place(drag.left+event.clientX-drag.x,drag.top+event.clientY-drag.y);
+  });
+  move.addEventListener('pointerup',event=>{if(drag&&event.pointerId===drag.id)finishDrag();});
+  move.addEventListener('pointercancel',()=>finishDrag(true));
+  move.addEventListener('lostpointercapture',()=>finishDrag(true));
+  move.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&drag){finishDrag(true);event.preventDefault();return;}
+    const directions={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+    const direction=directions[event.key];if(!direction||drag)return;
+    event.preventDefault();const rect=host.getBoundingClientRect(),step=event.shiftKey?40:10;
+    position=place(rect.left+direction[0]*step,rect.top+direction[1]*step);GM_setValue(positionKey,position);
+  });
+  window.addEventListener('keydown',event=>{if(event.key==='Escape'&&drag)finishDrag(true);});
+  window.addEventListener('resize',keepVisible);
+  if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{if(!drag)keepVisible();}).observe(host);
+  keepVisible();
+  GM_registerMenuCommand('Mail to Clio: Reset button position',()=>{finishDrag(true);position=null;GM_setValue(positionKey,null);host.style.left='auto';host.style.top='auto';host.style.right='24px';host.style.bottom='24px';keepVisible();});
   GM_registerMenuCommand('Mail to Clio: Show review button',()=>{mount();host.scrollIntoView({block:'nearest'});});
   function visible(el) { return el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden'; }
   function opened() {
