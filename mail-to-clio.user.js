@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Foulk Law Firm • Mail to Clio
 // @namespace    foulklawfirm.mail-to-clio
-// @version      1.2.2
+// @version      1.2.3
 // @updateURL    https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js
 // @downloadURL  https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js
 // @homepageURL  https://github.com/DWF15/FLF-Userscripts
@@ -120,10 +120,11 @@
   const style=document.createElement('style');
   style.textContent='button{border:0;border-radius:12px;background:#123b46;color:white;font:600 14px system-ui;padding:13px 18px;box-shadow:0 4px 20px #0003;cursor:pointer}button:disabled{opacity:.6}small{display:block;background:white;color:#263e48;padding:6px 10px;font:12px system-ui;max-width:280px;border-radius:6px;margin-top:6px}';
   const button=document.createElement('button');button.type='button';button.textContent='Review for Clio';
-  const note=document.createElement('small');note.textContent='Mail to Clio 1.2.2 • Open one notification.';
+  const note=document.createElement('small');note.textContent='Mail to Clio 1.2.3 • Open one notification.';
   const move=document.createElement('button');move.type='button';move.textContent='⋮⋮ Move';move.className='move';move.title='Drag to move. Arrow keys move the button; Shift moves farther.';move.setAttribute('aria-label','Move Mail to Clio panel');
-  style.textContent+='.move{display:block;margin:0 0 5px auto;padding:4px 10px;border-radius:6px;background:#eef3f4;color:#38535a;font:12px system-ui;box-shadow:0 1px 4px #0002;cursor:grab;touch-action:none;user-select:none}.move:active{cursor:grabbing}';
-  shadow.append(style,move,button,note);
+  style.textContent+='.toolbar{display:flex;align-items:center;gap:6px}.move{display:block;margin:0;padding:4px 10px;border-radius:6px;background:#eef3f4;color:#38535a;font:12px system-ui;box-shadow:0 1px 4px #0002;cursor:grab;touch-action:none;user-select:none}.move:active{cursor:grabbing}';
+  const toolbar=document.createElement('div');toolbar.className='toolbar';toolbar.append(button,move);
+  shadow.append(style,toolbar,note);
   function mount() { if(!host.isConnected && document.body) document.body.append(host); }
   mount();
   const positionKey='flf-panel-position-v1';
