@@ -4,17 +4,23 @@
 
 [Install or update Mail to Clio](https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js)
 
-Current userscript version: **1.2.3**. Includes the Gmail review badges introduced in version 1.2.0. Grouped ticket matching also requires hosted app version 1.4.0 or later.
+Current userscript version: **1.3.0**. Includes the Gmail review badges introduced in version 1.2.0. Grouped ticket matching also requires hosted app version 1.4.0 or later.
 
 ### Install once
 
 1. Enable the Tampermonkey browser extension.
 2. Open the install link above. Tampermonkey should offer Install or Update/Reinstall. Keep only one enabled copy of this script.
 3. If the browser displays plain code instead, replace the contents of the existing Mail to Clio script in Tampermonkey with that code and save.
-4. Refresh Gmail. The Mail to Clio note should show 1.2.3.
-5. Open one notification and click Review for Clio.
+4. Refresh Gmail. Tampermonkey should list userscript version 1.3.0.
+5. Open a notification or conversation. If several emails are expanded, choose one in **Email to review**, then click **Review for Clio**.
 
 New installations default to the firm's hosted review app. Existing installations retain their saved review URL and keywords because the script name, namespace and storage keys are unchanged.
+
+### Review a thread without collapsing messages
+
+When several messages are expanded, the floating panel shows **Email to review**. Choose the specific notice from the list, then click **Review for Clio**. The list uses the lead document name where available, so complaint and summons notices can be distinguished. Expand the desired message if it is not listed.
+
+Only the chosen message supplies that review's extracted fields and fingerprint. Other expanded messages are not combined with it. Quoted or forwarded material inside the chosen message retains the existing extraction warnings. Switching threads clears the selection; new messages in the same thread do not silently change it. With one expanded message, review works as before. Processed badges remain attached to the individual messages.
 
 ### Move the review button
 
@@ -35,3 +41,7 @@ This updates only the Gmail userscript. Backend app changes still require deploy
 Opened for review means a review window was opened. Clio update verified means the app confirmed a live field or calendar action; it does not imply that every action or client email is complete. Badges persist in the same browser/Tampermonkey profile, are not shared Gmail labels, and store a body hash, status and timestamp rather than the email text.
 
 This public repository contains only browser script code and instructions. Keep credentials, OAuth tokens, client messages, databases and private backend files out of this repository.
+
+### Development checks
+
+`node tests/parser.test.cjs` runs the synthetic parser checks. `node tests/thread-picker.browser.cjs` runs synthetic browser checks with Playwright and Chromium installed; set CHROMIUM_PATH to use an existing Chromium binary. The browser test uses a local simulated inbox, does not open Gmail, and does not call Clio.
