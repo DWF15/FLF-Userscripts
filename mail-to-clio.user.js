@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Foulk Law Firm • Mail to Clio
 // @namespace    foulklawfirm.mail-to-clio
-// @version      1.2.3
+// @version      1.3.0
 // @updateURL    https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js
 // @downloadURL  https://raw.githubusercontent.com/DWF15/FLF-Userscripts/main/mail-to-clio.user.js
 // @homepageURL  https://github.com/DWF15/FLF-Userscripts
@@ -120,11 +120,16 @@
   const style=document.createElement('style');
   style.textContent='button{border:0;border-radius:12px;background:#123b46;color:white;font:600 14px system-ui;padding:13px 18px;box-shadow:0 4px 20px #0003;cursor:pointer}button:disabled{opacity:.6}small{display:block;background:white;color:#263e48;padding:6px 10px;font:12px system-ui;max-width:280px;border-radius:6px;margin-top:6px}';
   const button=document.createElement('button');button.type='button';button.textContent='Review for Clio';
-  const note=document.createElement('small');note.textContent='Mail to Clio 1.2.3 • Open one notification.';
+  const note=document.createElement('small');note.textContent='Mail to Clio 1.3.0 • Open one notification.';
   const move=document.createElement('button');move.type='button';move.textContent='⋮⋮ Move';move.className='move';move.title='Drag to move. Arrow keys move the button; Shift moves farther.';move.setAttribute('aria-label','Move Mail to Clio panel');
   style.textContent+='.toolbar{display:flex;align-items:center;gap:6px}.move{display:block;margin:0;padding:4px 10px;border-radius:6px;background:#eef3f4;color:#38535a;font:12px system-ui;box-shadow:0 1px 4px #0002;cursor:grab;touch-action:none;user-select:none}.move:active{cursor:grabbing}';
   const toolbar=document.createElement('div');toolbar.className='toolbar';toolbar.append(button,move);
-  shadow.append(style,toolbar,note);
+  const messagePicker=document.createElement('label');messagePicker.className='message-picker';messagePicker.hidden=true;
+  const pickerLabel=document.createElement('span');pickerLabel.textContent='Email to review';
+  const messageChoice=document.createElement('select');messageChoice.setAttribute('aria-label','Email to review in this thread');
+  messagePicker.append(pickerLabel,messageChoice);
+  style.textContent+='.message-picker{display:block;margin-top:8px;padding:7px 8px;background:white;border-radius:6px;color:#263e48;font:12px system-ui}.message-picker[hidden]{display:none}.message-picker span{display:block;margin-bottom:4px}.message-picker select{box-sizing:border-box;width:100%;min-width:0;padding:5px;border:1px solid #b4c6ca;border-radius:4px;background:white;color:#263e48;font:12px system-ui}';
+  shadow.append(style,toolbar,messagePicker,note);
   function mount() { if(!host.isConnected && document.body) document.body.append(host); }
   mount();
   const positionKey='flf-panel-position-v1';
@@ -178,9 +183,45 @@
   function visible(el) { return el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden'; }
   function opened() {
     // Gmail DOM is deliberately treated as an untrusted, changeable source.
-    return [...document.querySelectorAll('.a3s')].filter(visible);
+    return [...document.querySelectorAll('.a3s')].filter(el=>visible(el)&&!el.parentElement?.closest('.a3s'));
   }
-  function setNote(text) { if(note.textContent!==text) note.textContent=text; }
+  const bodyIds=new WeakMap();let nextBodyId=0,chosenBody=null,pickerStamp='';
+  function bodyId(body){if(!bodyIds.has(body))bodyIds.set(body,String(++nextBodyId));return bodyIds.get(body);}
+  function messageLabel(body,index){
+    const clone=body.cloneNode(true);
+    // Labels describe the current message, not the older messages quoted below it.
+    clone.querySelectorAll('.gmail_quote').forEach(el=>el.remove());
+    let text=readBody(clone);if(!text.trim())text=readBody(body);
+    function value(label){
+      const match=text.match(new RegExp('^\\s*'+label+'(?:\\t| {2,}|:)\\s*([^\\n]+)','mi'));
+      return match?match[1].trim():'';
+    }
+    const documentName=value('Lead Document');
+    const description=value('Filing Description')||value('Filing Code');
+    const fallback=text.split('\n').map(line=>line.trim()).find(Boolean)||'Opened email';
+    return (index+1)+' · '+(documentName||description||fallback).replace(/\s+/g,' ').slice(0,140);
+  }
+  function updateMessageChoice(bodies){
+    if(chosenBody&&!bodies.includes(chosenBody))chosenBody=null;
+    messagePicker.hidden=bodies.length<=1;
+    const items=bodies.length>1?bodies.map((body,i)=>({id:bodyId(body),label:messageLabel(body,i)})):[];
+    const stamp=JSON.stringify(items);
+    if(pickerStamp!==stamp){
+      pickerStamp=stamp;
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose an email ('+bodies.length+' open)';
+      messageChoice.replaceChildren(placeholder);
+      for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.label;messageChoice.append(option);}
+    }
+    const selected=chosenBody?bodyId(chosenBody):'';if(messageChoice.value!==selected)messageChoice.value=selected;
+    if(bodies.length>1)pickerLabel.textContent='Email to review ('+bodies.length+' open)';
+  }
+  function selectedBody(bodies){return bodies.length===1?bodies[0]:(bodies.includes(chosenBody)?chosenBody:null);}
+  messageChoice.addEventListener('change',()=>{
+    chosenBody=opened().find(body=>bodyId(body)===messageChoice.value)||null;
+    if(chosenBody)chosenBody.scrollIntoView({block:'start',behavior:'smooth'});
+    scan();
+  });
+  function setNote(text) { if(note.textContent!==text) note.textContent=text;note.title='Mail to Clio 1.3.0 · '+text; }
   const marksKey='flf-message-marks-v1';
   function fingerprint(body){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(body.replace(/\s+/g,' ').trim())).then(buffer=>[...new Uint8Array(buffer)].map(x=>x.toString(16).padStart(2,'0')).join(''));}
   function marks(){return GM_getValue(marksKey,{});}
@@ -204,11 +245,12 @@
     badge.title='This browser’s Mail to Clio record. '+new Date(saved.at).toLocaleString()+'. A verified update can cover selected fields or a calendar action; check the review for remaining actions.';
   }
   function scan() {
+    const bodies=opened();updateMessageChoice(bodies);
+    for(const body of bodies)showMark(body).catch(()=>{});
+    const selected=selectedBody(bodies);
+    if(!selected){setNote(bodies.length?'Choose the email to review from the list above.':'Open a notification to extract.');return;}
     if (!config.enabled) { setNote('Keyword detection is paused. Manual review is available.'); return; }
-    const bodies=opened();
-    if (bodies.length!==1) { setNote(bodies.length?'Collapse the thread to one opened message.':'Open one notification to extract.'); return; }
-    showMark(bodies[0]).catch(()=>{});
-    const hits=extract(readBody(bodies[0]),config.keywords).keywords;
+    const hits=extract(readBody(selected),config.keywords).keywords;
     setNote(hits.length?'Detected: '+hits.slice(0,4).join(', '):'No configured keywords found. Manual review is available.');
   }
   GM_registerMenuCommand('Mail to Clio: Settings',()=>{
@@ -224,16 +266,20 @@
   });
   GM_registerMenuCommand('Mail to Clio: Pause/resume keyword detection',()=>{config.enabled=!config.enabled;GM_setValue('flf-config-v1',config);scan();});
   button.addEventListener('click',()=>{
-    const bodies=opened();
-    if(bodies.length!==1) { alert('Open exactly one expanded email. Collapse any other messages in the conversation.'); return; }
-    const body=readBody(bodies[0]);
+    const bodies=opened();updateMessageChoice(bodies);
+    const selected=selectedBody(bodies);
+    if(!selected){
+      setNote(bodies.length?'Choose the email to review from the list above.':'Open an email before reviewing it for Clio.');
+      if(bodies.length>1)messageChoice.focus();return;
+    }
+    const body=readBody(selected);
     if(body.length>100000) { alert('Notification is too large. Use a shorter single message.'); return; }
     // Open during the user gesture; no tokens or third-party APIs inside Gmail.
     if(handoffListener) window.removeEventListener('message',handoffListener);
     const popup=window.open(config.url,'flf-review','width=1000,height=850');
     if(!popup) { alert('Allow popups for Gmail, then try again.'); return; }
     const packet=extract(body,config.keywords);
-    if(bodies[0].querySelector('.gmail_quote'))packet.warnings.unshift('Quoted or forwarded content included. Verify which notice and hearing you intend to process.');
+    if(selected.querySelector('.gmail_quote'))packet.warnings.unshift('Quoted or forwarded content included. Verify which notice and hearing you intend to process.');
     if(!Object.keys(packet.fields).length)packet.warnings.unshift('No fields recognized from '+body.length+' characters of email text. Check that the notice is text in this email, rather than an image or attachment.');
     const fingerprintPromise=fingerprint(body);
     fingerprintPromise.then(hash=>mark(hash,'opened')).catch(()=>{});
